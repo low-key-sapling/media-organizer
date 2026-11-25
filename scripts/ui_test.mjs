@@ -1,0 +1,66 @@
+import { chromium } from '../frontend/node_modules/playwright/index.mjs'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import assert from 'node:assert/strict'
+
+const root = path.resolve(import.meta.dirname, '..')
+const pictures = path.join(root, 'docs', 'images')
+await fs.mkdir(pictures, { recursive: true })
+const browser = await chromium.launch({ channel: 'msedge', headless: true })
+const context = await browser.newContext({ viewport: { width: 1440, height: 1080 }, acceptDownloads: true })
+const external = [], errors = []
+await context.route('**/*', async route => {
+  if (!route.request().url().startsWith('http://127.0.0.1:8731/')) {
+    external.push(route.request().url())
+    return route.abort()
+  }
+  return route.continue()
+})
+const page = await context.newPage()
+page.on('pageerror', error => errors.push(error.message))
+try {
+  await page.goto('http://127.0.0.1:8731/', { waitUntil: 'networkidle' })
+  await page.getByRole('heading', { name: '让散落的文件，各归其位。' }).waitFor()
+  await page.screenshot({ path: path.join(pictures, 'workbench.png'), fullPage: true })
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false)
+  await page.getByRole('button', { name: '浏览', exact: true }).first().click()
+  await page.getByRole('dialog', { name: '选择目录' }).waitFor()
+  await page.getByRole('button', { name: '关闭', exact: true }).click()
+  const source = path.join(root, '.cache', 'ui-fixtures', 'source')
+  const target = path.join(root, '.cache', 'ui-fixtures', 'target')
+  await page.locator('#source').fill(source)
+  await page.locator('#target').fill(target)
+  await page.getByRole('button', { name: /扫描并预览/ }).click()
+  await page.getByRole('heading', { name: '检查整理预览', exact: true }).waitFor({ timeout: 30000 })
+  await page.getByRole('row').filter({ hasText: 'capture.jpg' }).getByRole('button', { name: '修改 capture.jpg', exact: true }).click()
+  const edit = page.getByRole('dialog', { name: '修改分类' })
+  await edit.getByPlaceholder('YYYYMM，例如 202611').fill('202410')
+  await edit.getByRole('button', { name: '更新预览' }).click()
+  await edit.waitFor({ state: 'hidden' })
+  await page.screenshot({ path: path.join(pictures, 'preview.png'), fullPage: true })
+  await page.getByRole('button', { name: '开始复制并校验', exact: true }).click()
+  await page.getByRole('button', { name: '确认复制', exact: true }).click()
+  await page.getByRole('heading', { name: '全部文件已通过完整校验', exact: true }).waitFor({ timeout: 30000 })
+  await page.screenshot({ path: path.join(pictures, 'verified.png'), fullPage: true })
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('link', { name: '导出清单' }).click()
+  const download = await downloadPromise
+  const csv = await fs.readFile(await download.path(), 'utf8')
+  assert.ok(csv.includes('202410'))
+  assert.ok((await fs.readdir(source)).includes('capture.jpg'))
+  await page.getByRole('button', { name: /^规则与设置/ }).click()
+  await page.getByRole('heading', { name: '规则与设置', exact: true }).waitFor()
+  await page.getByRole('button', { name: '保存配置', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: '配置已保存' }).waitFor()
+  await page.getByRole('button', { name: /^任务历史/ }).click()
+  await page.getByRole('heading', { name: '每次整理，都有记录。', exact: true }).waitFor()
+  await page.getByRole('button', { name: '新建任务', exact: true }).click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({ path: path.join(pictures, 'mobile.png'), fullPage: true })
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'mobile horizontal overflow')
+  assert.deepEqual(external, [], 'interface attempted external network access')
+  assert.deepEqual(errors, [], 'browser runtime errors')
+  console.log('PASS: offline interface, folder browsing, scan, preview edit, full copy/verification, CSV export, settings, history and mobile layout')
+} finally {
+  await browser.close()
+}
