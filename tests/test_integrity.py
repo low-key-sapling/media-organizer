@@ -292,3 +292,35 @@ def test_changes_to_an_earlier_verified_target_are_detected(organizer, directori
     assert modified
     assert not checked["safe_to_delete"]
     assert checked["status"] == "completed_issues"
+
+
+def test_copy_on_filesystems_without_hard_links(organizer, directories, monkeypatch):
+    source, target = directories
+    (source / "20261125.txt").write_bytes(b"fallback content")
+    def unsupported(*args):
+        raise OSError("hard links not supported")
+    monkeypatch.setattr(os, "link", unsupported)
+    job = run(organizer, source, target)
+    assert job["safe_to_delete"], job
+    assert (target / "documents/202611/others/20261125.txt").read_bytes() == b"fallback content"
+
+
+def test_exclusive_open_failure_never_deletes_a_concurrent_target(organizer, directories, monkeypatch):
+    source, target = directories
+    (source / "20261125.txt").write_bytes(b"source")
+    destination = target / "documents/202611/others/20261125.txt"
+    def unsupported(*args):
+        raise OSError("hard links not supported")
+    original_open = Path.open
+    def concurrent_file(path, mode="r", *args, **kwargs):
+        if path == destination and mode == "xb":
+            with original_open(path, "wb") as handle:
+                handle.write(b"unrelated concurrent target")
+            raise PermissionError("target appeared during exclusive open")
+        return original_open(path, mode, *args, **kwargs)
+    monkeypatch.setattr(os, "link", unsupported)
+    monkeypatch.setattr(Path, "open", concurrent_file)
+    job = run(organizer, source, target)
+    assert not job["safe_to_delete"]
+    assert destination.read_bytes() == b"unrelated concurrent target"
+    assert (source / "20261125.txt").read_bytes() == b"source"

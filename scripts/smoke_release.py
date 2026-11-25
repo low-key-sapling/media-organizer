@@ -8,6 +8,9 @@ import subprocess
 import sys
 import tempfile
 import io
+import socket
+import time
+import urllib.request
 from pathlib import Path
 
 
@@ -60,7 +63,34 @@ def main():
             assert hashlib.sha256((target / entry["target_rel"]).read_bytes()).hexdigest() == hashlib.sha256(expected).hexdigest()
         quick = command("run", str(source), str(target), "--verification", "quick", "--yes")
         assert not quick["safe_to_delete"], quick
-    print("PASS: frozen startup, bundled tools/data, copy, SHA-256, source preservation, quick-level deletion gate", flush=True)
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+        server = subprocess.Popen([str(executable), "--state-dir", str(root / "server-state"), "serve", "--no-browser", "--port", str(port)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        try:
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            deadline = time.monotonic() + 20
+            while True:
+                try:
+                    with opener.open(f"http://127.0.0.1:{port}/api/meta", timeout=2) as response:
+                        assert json.load(response)["offline"] is True
+                    break
+                except OSError:
+                    if server.poll() is not None or time.monotonic() >= deadline:
+                        raise AssertionError("Frozen local web service did not start")
+                    time.sleep(0.1)
+            with opener.open(f"http://127.0.0.1:{port}/", timeout=5) as response:
+                assert b'id="app"' in response.read()
+            with opener.open(f"http://127.0.0.1:{port}/api/jobs", timeout=5) as response:
+                assert json.load(response) == []
+        finally:
+            server.terminate()
+            try:
+                server.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                server.kill()
+                server.wait(timeout=5)
+    print("PASS: frozen CLI and web service, bundled tools/data, Unicode paths, offline GPS, copy, SHA-256, source preservation, quick-level deletion gate", flush=True)
 
 
 if __name__ == "__main__":

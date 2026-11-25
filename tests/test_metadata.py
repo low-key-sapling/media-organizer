@@ -75,3 +75,10 @@ def test_text_and_gps_conflict_is_visible(tmp_path, places):
     result = record(tmp_path, places, "photo.jpg", {"City": "杭州", "CountryCode": "CN", "GPSLatitude": 0, "GPSLongitude": -179.9})
     assert result["location"] == "CN_Zhejiang_Hangzhou"
     assert any("不同" in warning for warning in result["warnings"])
+
+
+def test_created_location_is_used_and_shown_location_is_not_inferred(tmp_path, places):
+    result = record(tmp_path, places, "created.jpg", {"LocationCreatedCity": "杭州", "LocationCreatedCountryCode": "CN", "LocationShownCity": "Other"})
+    assert result["location"] == "CN_Zhejiang_Hangzhou"
+    shown = record(tmp_path, places, "shown.jpg", {"LocationShownCity": "杭州"})
+    assert shown["location"] == "others"

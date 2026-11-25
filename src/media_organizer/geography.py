@@ -4,6 +4,7 @@ import math
 import re
 import sqlite3
 import unicodedata
+from contextlib import contextmanager
 from pathlib import Path
 
 from .paths import resource
@@ -29,10 +30,14 @@ class Places:
     def available(self) -> bool:
         return self.path.is_file()
 
+    @contextmanager
     def connect(self):
         db = sqlite3.connect(f"{self.path.as_uri()}?mode=ro", uri=True)
         db.row_factory = sqlite3.Row
-        return db
+        try:
+            yield db
+        finally:
+            db.close()
 
     @staticmethod
     def result(row, source: str, km: float | None = None) -> dict:

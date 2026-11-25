@@ -32,7 +32,7 @@ def exiftool_path() -> Path | None:
 
 
 class MetadataReader:
-    TAGS = ("DateTimeOriginal", "CreateDate", "CreationDate", "RecordingTime", "OffsetTimeOriginal", "GPSLatitude", "GPSLongitude", "GPSLatitudeRef", "GPSLongitudeRef", "Make", "Model", "LensModel", "ExposureTime", "FNumber", "ISO", "FileSource", "SceneType", "City", "Province-State", "Country", "CountryCode", "Country-PrimaryLocationName")
+    TAGS = ("DateTimeOriginal", "CreateDate", "CreationDate", "RecordingTime", "OffsetTimeOriginal", "GPSLatitude", "GPSLongitude", "GPSLatitudeRef", "GPSLongitudeRef", "Make", "Model", "LensModel", "ExposureTime", "FNumber", "ISO", "FileSource", "SceneType", "City", "Province-State", "Country", "CountryCode", "Country-PrimaryLocationName", "LocationCreatedCity", "LocationCreatedProvinceState", "LocationCreatedCountryCode", "LocationCreatedCountryName")
 
     def __init__(self):
         self.executable = exiftool_path()
@@ -156,9 +156,9 @@ def classify(source_rel: str, stat, metadata: dict, places: Places, settings: di
     if date.replace(tzinfo=None) > datetime.now() + timedelta(days=2):
         warnings.append("归档日期在未来，请检查")
     place = None
-    city = str(tag(metadata, "City") or "")
+    city = str(tag(metadata, "LocationCreatedCity") or tag(metadata, "City") or "")
     if city:
-        place = places.city(city, str(tag(metadata, "CountryCode") or tag(metadata, "Country") or tag(metadata, "Country-PrimaryLocationName") or ""), str(tag(metadata, "Province-State") or ""))
+        place = places.city(city, str(tag(metadata, "LocationCreatedCountryCode") or tag(metadata, "LocationCreatedCountryName") or tag(metadata, "CountryCode") or tag(metadata, "Country") or tag(metadata, "Country-PrimaryLocationName") or ""), str(tag(metadata, "LocationCreatedProvinceState") or tag(metadata, "Province-State") or ""))
         if not place:
             warnings.append("地点文字无法唯一匹配到城市")
     lat, lon = tag(metadata, "GPSLatitude"), tag(metadata, "GPSLongitude")

@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--run", type=int)
     parser.add_argument("--logs", type=int, help="Job ID")
     parser.add_argument("--artifact", type=int)
+    parser.add_argument("--artifacts", type=int, help="List artifacts for a workflow run")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--sha")
     args = parser.parse_args()
@@ -48,6 +49,8 @@ def main():
     with httpx.Client(headers=headers, follow_redirects=True, timeout=40, trust_env=False, proxy=proxy, verify=ssl.create_default_context()) as client:
         if args.logs:
             url = f"{endpoint}/actions/jobs/{args.logs}/logs"
+        elif args.artifacts:
+            url = f"{endpoint}/actions/runs/{args.artifacts}/artifacts"
         elif args.artifact:
             url = f"{endpoint}/actions/artifacts/{args.artifact}/zip"
         elif args.run:
@@ -66,7 +69,9 @@ def main():
             print(response.text)
         else:
             body = response.json()
-            if args.run:
+            if args.artifacts:
+                data = [{"id": item["id"], "name": item["name"], "size_in_bytes": item["size_in_bytes"], "expired": item["expired"]} for item in body.get("artifacts", [])]
+            elif args.run:
                 data = [{"id": item["id"], "name": item["name"], "status": item["status"], "conclusion": item["conclusion"], "html_url": item["html_url"], "steps": [{"name": step["name"], "status": step["status"], "conclusion": step["conclusion"]} for step in item.get("steps", [])]} for item in body.get("jobs", [])]
             else:
                 data = [{"id": item["id"], "status": item["status"], "conclusion": item["conclusion"], "html_url": item["html_url"], "head_sha": item["head_sha"], "name": item["name"]} for item in body.get("workflow_runs", [])]

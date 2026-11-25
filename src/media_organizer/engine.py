@@ -284,8 +284,11 @@ class Organizer:
                 continue
             except OSError:
                 # Filesystems without hard links use exclusive creation, still never overwrite.
+                owned_identity = None
                 try:
                     with destination.open("xb") as dst, temp.open("rb") as src:
+                        owned = os.fstat(dst.fileno())
+                        owned_identity = (owned.st_dev, owned.st_ino)
                         while chunk := src.read(BLOCK):
                             if event.is_set():
                                 raise Interrupted()
@@ -295,8 +298,11 @@ class Organizer:
                 except FileExistsError:
                     continue
                 except BaseException:
-                    # This file was exclusively created by this invocation.
-                    destination.unlink(missing_ok=True)
+                    # An open failure does not imply that this invocation owns the name.
+                    if owned_identity is not None and destination.exists() and not is_link(destination):
+                        current = destination.stat(follow_symlinks=False)
+                        if (current.st_dev, current.st_ino) == owned_identity:
+                            destination.unlink(missing_ok=True)
                     raise
             temp.unlink(missing_ok=True)
             self._remember_destination(destination)

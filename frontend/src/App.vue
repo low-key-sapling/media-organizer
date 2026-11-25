@@ -262,6 +262,7 @@ const selectedAll = computed(
       .every((e) => selected.value.has(e.id)),
 );
 const allPages = computed(() => Math.max(1, Math.ceil(total.value / 50)));
+let browseRequest = 0;
 let poll: ReturnType<typeof setInterval>,
   toastTimer: ReturnType<typeof setTimeout>,
   searchTimer: ReturnType<typeof setTimeout>,
@@ -481,6 +482,7 @@ async function saveEdit() {
   }
 }
 async function browse(kind: "source" | "target", path?: string) {
+  const request = ++browseRequest;
   browserBusy.value = true;
   if (!browser.value)
     browser.value = { kind, path: "", parent: "", directories: [] };
@@ -491,12 +493,14 @@ async function browse(kind: "source" | "target", path?: string) {
           path: path ?? (kind === "source" ? source.value : target.value),
         }),
     );
+    if (!browser.value || request !== browseRequest) return;
     browser.value = { kind, ...result };
     browserPath.value = result.path;
   } catch (error: any) {
     notice(error.message, true);
-    if (browser.value && !browser.value.path) {
+    if (browser.value && !browser.value.path && request === browseRequest) {
       const result = await api("/directories");
+      if (!browser.value || request !== browseRequest) return;
       browser.value = { kind, ...result };
       browserPath.value = "";
     }
