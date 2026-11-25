@@ -52,6 +52,8 @@ def test_dates_preserve_local_month_and_priority(tmp_path, places):
     assert record(tmp_path, places, "unknown.txt")["month"] == "202501"
     assert record(tmp_path, places, "audio.mp3", {"Year": "1999"})["month"] == "202501"
     assert record(tmp_path, places, "video.mp4", {"CreateDate": "1904:01:01 00:00:00"})["month"] == "202501"
+    assert record(tmp_path, places, "historic.jpg", {"DateTimeOriginal": "1904:01:01 00:00:00"})["month"] == "190401"
+    assert record(tmp_path, places, "early.jpg", {"DateTimeOriginal": "0001:01:01 00:00:00"})["month"] == "000101"
 
 
 def test_ambiguous_and_invalid_filename_dates():

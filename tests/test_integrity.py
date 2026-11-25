@@ -37,7 +37,7 @@ def test_full_copy_is_lossless_and_keeps_source(organizer, directories):
 
 
 @pytest.mark.parametrize("level", ["quick", "sampled"])
-def test_lower_levels_never_suggest_deletion(organizer, directories, level):
+def test_lower_levels_never_suggest_deletion(organizer, directories, level, monkeypatch):
     source, target = directories
     for i in range(11):
         (source / f"{i}.txt").write_bytes(bytes([i]))
@@ -45,6 +45,17 @@ def test_lower_levels_never_suggest_deletion(organizer, directories, level):
     assert job["status"] == "completed", job
     assert not job["safe_to_delete"]
     assert job["verified_count"] == (2 if level == "sampled" else 0)
+    import media_organizer.engine as engine
+    original_digest = engine.sha256
+    first = True
+    def inspect_progress(path, stop=None, progress=None):
+        nonlocal first
+        if first:
+            state = organizer.store.job(job["id"])
+            assert state["checked_count"] == state["checked_bytes"] == 0
+            first = False
+        return original_digest(path, stop, progress)
+    monkeypatch.setattr(engine, "sha256", inspect_progress)
     upgraded = organizer.execute(job["id"], "full", background=False, verify_only=True)
     assert upgraded["safe_to_delete"] is True
 

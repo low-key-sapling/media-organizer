@@ -368,7 +368,7 @@ class Organizer:
         return count, changes
 
     def verify(self, job_id: str):
-        job = self.store.update_job(job_id, status="verifying", phase="正在校验文件", verified_count=0, safe_to_delete=False)
+        job = self.store.update_job(job_id, status="verifying", phase="正在校验文件", verified_count=0, checked_count=0, checked_bytes=0, active_verify_bytes=0, safe_to_delete=False)
         level, event = job["verification"], self.events[job_id]
         sample_ids = set()
         if level == "sampled":
