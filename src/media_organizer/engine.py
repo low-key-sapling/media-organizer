@@ -92,8 +92,14 @@ class Organizer:
         result["extension_mapping"] = {k.lower(): v for k, v in mapping.items()}
         return self.store.save_settings(result)
 
-    def create(self, source: str, target: str, verification: str = "full", background: bool = True) -> dict:
+    def validate_request(self, source: str, target: str) -> tuple[Path, Path]:
         src, dst = validate_roots(source, target)
+        if self.store.path.parent.resolve().is_relative_to(src):
+            raise ValueError("源目录包含程序正在使用的工作数据。请先把整个程序目录移到源目录之外再启动，或用 --state-dir 指定独立工作目录")
+        return src, dst
+
+    def create(self, source: str, target: str, verification: str = "full", background: bool = True) -> dict:
+        src, dst = self.validate_request(source, target)
         if verification not in LEVELS:
             raise ValueError("无效的校验级别")
         with self.lock:
@@ -205,7 +211,7 @@ class Organizer:
             level = verification or job["verification"]
             if level not in LEVELS:
                 raise ValueError("无效的校验级别")
-            validate_roots(job["source"], job["target"])
+            self.validate_request(job["source"], job["target"])
             self.events[job_id] = threading.Event()
             self.store.update_job(job_id, status="queued", verification=level, safe_to_delete=False, error="", phase="等待校验" if verify_only else "等待复制")
             if background:

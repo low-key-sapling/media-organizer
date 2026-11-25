@@ -145,6 +145,12 @@ def test_invalid_override_and_path_escape_rejected(organizer, directories, tmp_p
             validate_roots(str(source), str(dst))
 
 
+def test_working_database_cannot_be_part_of_the_source(organizer, tmp_path):
+    with pytest.raises(ValueError, match="工作数据"):
+        organizer.create(str(organizer.store.path.parent), str(tmp_path / "archive"), background=False)
+    assert organizer.store.jobs() == []
+
+
 def test_symlink_is_reported_not_followed(organizer, directories, tmp_path):
     source, target = directories
     (source / "ordinary.txt").write_text("hello")
