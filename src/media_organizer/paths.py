@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 CATEGORIES = ("photos", "images", "videos", "audio", "documents", "archives", "others")
+EXTENSION_CATEGORIES = ("documents", "archives")
 LEVELS = ("quick", "sampled", "full")
 
 
@@ -74,7 +75,7 @@ def validate_override(category: str, month: str, location: str) -> None:
         raise ValueError("无效的文件类型")
     if not re.fullmatch(r"\d{4}(0[1-9]|1[0-2])", month) or int(month[:4]) == 0:
         raise ValueError("月份格式必须为 YYYYMM")
-    if category != "documents" and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,159}", location):
+    if category not in EXTENSION_CATEGORIES and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,159}", location):
         raise ValueError("地点需使用英文字母、数字、下划线或短横线")
 
 
@@ -82,7 +83,13 @@ def relative_target(entry: dict) -> str:
     source = Path(entry["source_rel"])
     category = entry["category"]
     folder = entry["location"]
-    if category == "documents":
+    if category in EXTENSION_CATEGORIES:
         extension = source.suffix.removeprefix(".").lower()
+        if (
+            category == "archives"
+            and extension in ("gz", "bz2", "xz", "zst")
+            and source.name.lower().endswith(f".tar.{extension}")
+        ):
+            extension = f"tar.{extension}"
         folder = safe_name(extension) if extension else "others"
     return "/".join((category, entry["month"], folder, safe_name(source.name)))

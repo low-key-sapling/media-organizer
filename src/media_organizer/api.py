@@ -16,7 +16,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from . import __version__
 from .engine import Organizer
 from .metadata import DEFAULT_MAPPING
-from .paths import CATEGORIES, state_directory, web_root
+from .paths import CATEGORIES, EXTENSION_CATEGORIES, state_directory, web_root
 
 
 class Model(BaseModel):
@@ -82,7 +82,15 @@ def create_app(directory: Path | None = None, organizer: Organizer | None = None
 
     @app.get("/api/meta")
     def meta():
-        return {"version": __version__, "offline": True, "categories": list(CATEGORIES), "extension_mapping": DEFAULT_MAPPING, "metadata_available": service.reader.executable is not None, "places": service.places.info()}
+        return {
+            "version": __version__,
+            "offline": True,
+            "categories": list(CATEGORIES),
+            "group_by_extension": list(EXTENSION_CATEGORIES),
+            "extension_mapping": DEFAULT_MAPPING,
+            "metadata_available": service.reader.executable is not None,
+            "places": service.places.info(),
+        }
 
     @app.get("/api/settings")
     def settings():

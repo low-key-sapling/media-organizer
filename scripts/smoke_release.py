@@ -12,6 +12,7 @@ import socket
 import time
 import urllib.request
 from pathlib import Path
+from zipfile import ZipFile
 
 
 def main():
@@ -33,6 +34,10 @@ def main():
         buffer = io.BytesIO()
         image.save(buffer, format="JPEG", exif=exif)
         originals["相机 照片.jpg"] = buffer.getvalue()
+        archive_buffer = io.BytesIO()
+        with ZipFile(archive_buffer, "w") as archive:
+            archive.writestr("note.txt", "Hello, archived world!")
+        originals["资料 20261125.ZIP"] = archive_buffer.getvalue()
         for name, data in originals.items():
             (source / name).write_bytes(data)
         def command(*args):
@@ -60,6 +65,9 @@ def main():
         document = next(entry for entry in files if entry["source_rel"] == "旅途 20261125.txt")
         assert document["target_rel"] == "documents/202611/txt/旅途 20261125.txt", document
         assert not document["location"], document
+        archive = next(entry for entry in files if entry["source_rel"] == "资料 20261125.ZIP")
+        assert archive["target_rel"] == "archives/202611/zip/资料 20261125.ZIP", archive
+        assert not archive["location"], archive
         for entry in files:
             expected = originals[entry["source_rel"]]
             assert (source / entry["source_rel"]).read_bytes() == expected

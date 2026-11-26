@@ -6,7 +6,7 @@ Windows / Linux 离线文件整理工具。支持预览修正、任务恢复和�
 
 在 [GitHub Releases](https://github.com/low-key-sapling/media-organizer/releases/latest) 下载对应平台的压缩包。解压后启动 `media-organizer.exe`（Windows）或 `./media-organizer`（Linux）。程序自动打开本地浏览器，网页、运行时、元数据工具与城市库均随包提供。
 
-选择源目录与独立的目标目录，先扫描预览，再复制并校验。文档按 `documents/YYYYMM/后缀/文件名` 归档，例如 `documents/202611/pdf/合同.PDF`。照片等按 `类型/YYYYMM/地点/文件名` 归档，地点未知时使用 `others`。
+选择源目录与独立的目标目录，先扫描预览，再复制并校验。文档和压缩包按类型、月份和后缀归档，例如 `documents/202611/pdf/合同.PDF` 和 `archives/202611/tar.gz/备份.tar.gz`。照片等按 `类型/YYYYMM/地点/文件名` 归档，地点未知时使用 `others`。
 
 支持照片、图片、视频、音频、文档、压缩包和其他文件。允许批量修正分类，支持同名文件保留、中断恢复、任务历史、CSV 导出和配置导入导出。
 

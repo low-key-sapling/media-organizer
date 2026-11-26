@@ -15,8 +15,8 @@ from pathlib import Path
 
 from .filedata import BLOCK, Interrupted, ProcessLock, copy_extras, extra_signature, sha256, preserve_windows_properties, property_report
 from .geography import Places
-from .metadata import DEFAULT_MAPPING, DOCUMENT_LOCATION, MetadataReader, classify
-from .paths import CATEGORIES, LEVELS, contained, is_link, relative_target, validate_override, validate_roots
+from .metadata import DEFAULT_MAPPING, NO_LOCATION, MetadataReader, classify
+from .paths import CATEGORIES, EXTENSION_CATEGORIES, LEVELS, contained, is_link, relative_target, validate_override, validate_roots
 from .store import Store, now
 
 BUSY = {"queued_scan", "scanning", "queued", "copying", "verifying"}
@@ -174,7 +174,7 @@ class Organizer:
         stats = self.store.stats(job_id)
         if not self.reader.executable:
             warnings.append("ExifTool 不可用，当前使用图片元数据回退读取；正式发行包必须携带 ExifTool")
-        if not self.places.available and (stats["categories"].keys() - {"documents"}):
+        if not self.places.available and any(category not in EXTENSION_CATEGORIES for category in stats["categories"]):
             warnings.append("离线城市库不可用，无法执行离线城市反查")
         self.store.update_job(job_id, status="ready", phase="扫描完成，请检查整理预览", stats=stats, warnings=warnings)
 
@@ -195,10 +195,10 @@ class Organizer:
                     raise ValueError("特殊项目不能通过修改分类转为普通文件")
                 updates = allowed.copy()
                 category = updates.get("category", entry["category"])
-                if category == "documents":
+                if category in EXTENSION_CATEGORIES:
                     if updates.keys() == {"location"}:
                         continue
-                    updates.update(DOCUMENT_LOCATION)
+                    updates.update(NO_LOCATION)
                 elif "location" in updates:
                     updates.update(location_source="manual", city="", distance_km=None)
                 elif not entry["location"]:
@@ -208,7 +208,7 @@ class Organizer:
                 updates["target_rel"] = relative_target(merged)
                 records.append((entry_id, updates))
             if not records:
-                raise ValueError("文档按后缀归档，可修改类型或月份")
+                raise ValueError("所选文件按后缀归档，可修改类型或月份")
             for entry_id, updates in records:
                 self.store.update_entry(job_id, entry_id, **updates, manual=True)
             return len(records)

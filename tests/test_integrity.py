@@ -331,13 +331,13 @@ def test_document_conversion_and_location_edit_in_a_mixed_selection(organizer, d
     assert (target / "images/202611/others/Invoice_20261125.PDF").is_file()
 
 
-def test_old_document_plan_can_be_copied_and_reverified(organizer, directories):
+@pytest.mark.parametrize(("category", "name"), [("documents", "20261125.txt"), ("archives", "20261125.zip")])
+def test_old_extension_plan_can_be_copied_and_reverified(organizer, directories, category, name):
     source, target = directories
-    name = "20261125.txt"
     (source / name).write_bytes(b"existing plan")
     job = organizer.create(str(source), str(target), background=False)
     entry = next(organizer.store.iter_entries(job["id"]))
-    legacy_path = f"documents/202611/others/{name}"
+    legacy_path = f"{category}/202611/others/{name}"
     organizer.store.update_entry(job["id"], entry["id"], target_rel=legacy_path, location="others", location_source="unknown")
 
     assert organizer.execute(job["id"], background=False)["safe_to_delete"]

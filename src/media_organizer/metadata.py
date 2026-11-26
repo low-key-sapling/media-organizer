@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from .geography import Places
-from .paths import CATEGORIES, relative_target, resource
+from .paths import CATEGORIES, EXTENSION_CATEGORIES, relative_target, resource
 
 EXTENSIONS = {
     "photos": "dng nef nrw cr2 cr3 arw srf sr2 orf rw2 pef raf raw rwl srw 3fr erf kdc mef mos mrw x3f",
@@ -20,7 +20,7 @@ EXTENSIONS = {
     "archives": "zip rar 7z tar gz bz2 xz zst tgz tbz2 txz iso cab",
 }
 DEFAULT_MAPPING = {ext: category for category, extensions in EXTENSIONS.items() for ext in extensions.split()}
-DOCUMENT_LOCATION = {"location": "", "location_source": "", "city": "", "distance_km": None}
+NO_LOCATION = {"location": "", "location_source": "", "city": "", "distance_km": None}
 
 
 def exiftool_path() -> Path | None:
@@ -183,7 +183,7 @@ def classify(source_rel: str, stat, metadata: dict, places: Places, settings: di
             warnings.append("存在创建或数字化时间，未将其直接当作拍摄/录制时间")
     if date.replace(tzinfo=None) > datetime.now() + timedelta(days=2):
         warnings.append("归档日期在未来，请检查")
-    place = DOCUMENT_LOCATION if category == "documents" else classify_location(metadata, places, settings, warnings)
+    place = NO_LOCATION if category in EXTENSION_CATEGORIES else classify_location(metadata, places, settings, warnings)
     result = {"source_rel": source_rel, "kind": "file", "status": "planned", "size": stat.st_size, "mtime_ns": stat.st_mtime_ns, "ctime_ns": stat.st_ctime_ns, "mode": stat.st_mode, "category": category, "month": f"{date.year:04d}{date.month:02d}", "date_source": date_source, "original_date": date.isoformat(), "type_source": type_source, **place, "warnings": warnings, "error": "", "source_hash": "", "target_hash": "", "content_verified": False, "manual": False, "extra_issues": []}
     result["target_rel"] = relative_target(result)
     result.update(birthtime_ns=getattr(stat, "st_birthtime_ns", None), uid=getattr(stat, "st_uid", None), gid=getattr(stat, "st_gid", None))
