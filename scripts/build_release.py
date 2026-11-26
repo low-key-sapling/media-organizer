@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 import uuid
 from pathlib import Path
 
@@ -40,7 +41,9 @@ def main():
     separator = os.pathsep
     command = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--name", "media-organizer", "--paths", str(ROOT / "src"), "--collect-all", "uvicorn", "--collect-all", "fastapi", "--collect-all", "starlette", "--collect-all", "PIL", "--hidden-import", "media_organizer.api", "--add-data", f"{ROOT / 'frontend/dist'}{separator}web", "--add-data", f"{ROOT / 'resources/data'}{separator}data", "--add-data", f"{vendor_stage}{separator}vendor", str(ROOT / "launcher.py")]
     run(*command)
-    name = f"media-organizer-0.1.0-{platform}-x64"
+    with (ROOT / "pyproject.toml").open("rb") as config:
+        version = tomllib.load(config)["project"]["version"]
+    name = f"media-organizer-{version}-{platform}-x64"
     release_root = ROOT / "release"
     release_root.mkdir(exist_ok=True)
     destination = release_root / name

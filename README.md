@@ -4,7 +4,7 @@ Windows / Linux 离线媒体整理工具。按类型、月份、城市复制文�
 
 ## 使用
 
-下载对应平台的发行压缩包，解压后启动 `media-organizer.exe`（Windows）或 `./media-organizer`（Linux）。程序自动打开本地浏览器，网页、运行时、元数据工具与城市库均随包提供，用户无需安装 Python、Node 或 Perl。
+在 [GitHub Releases](https://github.com/low-key-sapling/media-organizer/releases/latest) 下载对应平台的压缩包。解压后启动 `media-organizer.exe`（Windows）或 `./media-organizer`（Linux）。程序自动打开本地浏览器，网页、运行时、元数据工具与城市库均随包提供。
 
 选择源目录与独立的目标目录，先扫描预览，再复制并校验。源文件不会被程序删除。目录格式为 `类型/YYYYMM/国家_省份_城市/文件名`；未知地点使用 `others`。
 

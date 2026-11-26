@@ -49,3 +49,73 @@ jobs:
             release/*.zip
             release/*.tar.gz
           if-no-files-found: error
+
+  publish:
+    if: github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    needs: release
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: media-organizer-*-x64
+          path: release
+          merge-multiple: true
+      - name: Publish both offline packages
+        shell: bash
+        working-directory: release
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version=${RELEASE_TAG#v}
+          windows="media-organizer-${version}-windows-x64.zip"
+          linux="media-organizer-${version}-linux-x64.tar.gz"
+          checksum=SHA256SUMS.txt
+          for package in "$windows" "$linux"; do
+            if [[ ! -s "$package" ]]; then
+              echo "Missing $package. Check that the tag matches the package version." >&2
+              exit 1
+            fi
+          done
+          sha256sum "$windows" "$linux" > "$checksum"
+
+          # A failed upload leaves a draft that this workflow can safely retry.
+          marker='<!-- media-organizer release workflow -->'
+          if release=$(gh release view "$RELEASE_TAG" --json isDraft,body,assets,url); then
+            if jq -e '.isDraft == false' <<< "$release" > /dev/null; then
+              if ! jq -e --arg win "$windows" --arg lin "$linux" --arg sums "$checksum" '
+                [.assets[] | select(.size > 0) | .name] as $asset_names
+                | ([$win, $lin, $sums] - $asset_names | length) == 0
+              ' <<< "$release" > /dev/null; then
+                echo "The published release is missing an expected asset." >&2
+                exit 1
+              fi
+              jq -r '.url' <<< "$release"
+              exit 0
+            fi
+            if ! jq -e --arg marker "$marker" '(.body // "") | contains($marker)' <<< "$release" > /dev/null; then
+              echo "A draft for this tag already exists outside this workflow." >&2
+              exit 1
+            fi
+          else
+            gh release create "$RELEASE_TAG" --draft --verify-tag \
+              --title "Media Organizer $RELEASE_TAG" --notes-file - <<'NOTES'
+          <!-- media-organizer release workflow -->
+
+          按类型、月份和地点整理文件，支持预览、复制后校验、中断恢复和导出 CSV 清单。
+
+          - **Windows x64** 下载 ZIP，完整解压后双击 `media-organizer.exe`。
+          - **Linux x64** 下载 TAR.GZ，解压后运行 `./media-organizer`。构建和验证基于 Ubuntu 22.04 x64。
+
+          两个平台均随包提供所需运行时和离线城市库。压缩包的 SHA-256 校验值见 `SHA256SUMS.txt`。
+          NOTES
+          fi
+
+          gh release upload "$RELEASE_TAG" "$windows" "$linux" "$checksum" --clobber
+          gh release edit "$RELEASE_TAG" --verify-tag --draft=false
