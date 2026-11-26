@@ -108,7 +108,7 @@ jobs:
               --title "Media Organizer $RELEASE_TAG" --notes-file - <<'NOTES'
           <!-- media-organizer release workflow -->
 
-          按类型、月份和地点整理文件，支持预览、复制后校验、中断恢复和导出 CSV 清单。
+          按类型和月份整理文件。文档按文件后缀归档，例如 `documents/202611/pdf/合同.PDF`。支持预览、复制后校验、中断恢复和导出 CSV 清单。
 
           - **Windows x64** 下载 ZIP，完整解压后双击 `media-organizer.exe`。
           - **Linux x64** 下载 TAR.GZ，解压后运行 `./media-organizer`。构建和验证基于 Ubuntu 22.04 x64。

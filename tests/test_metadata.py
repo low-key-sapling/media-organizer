@@ -69,6 +69,9 @@ def test_offline_city_and_gps(tmp_path, places):
     gps = record(tmp_path, places, "a.jpg", {"GPSLatitude": 30.28, "GPSLongitude": 120.15})
     assert gps["location"] == "CN_Zhejiang_Hangzhou"
     assert gps["location_source"] == "gps_approximate"
+    document = record(tmp_path, places, "report.PDF", {"City": "杭州", "CountryCode": "CN", "GPSLatitude": 30.28, "GPSLongitude": 120.15})
+    assert document["target_rel"] == "documents/202501/pdf/report.PDF"
+    assert not document["location"] and not document["location_source"]
     assert places.nearest(0, 179.9)["city"] == "Dateline"
     assert places.nearest(-60, 0) is None
 

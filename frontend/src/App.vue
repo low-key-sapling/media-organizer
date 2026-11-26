@@ -194,6 +194,12 @@ const showConfirm = ref(false),
   editMonth = ref(""),
   editLocation = ref(""),
   rules = ref<{ extension: string; category: string }[]>([]);
+const editUsesLocation = computed(() => {
+  if (editCategory.value) return editCategory.value !== "documents";
+  return files.value.some(
+    (entry) => selected.value.has(entry.id) && entry.category !== "documents",
+  );
+});
 const browser = ref<{
     kind: "source" | "target";
     path: string;
@@ -310,7 +316,25 @@ function name(path: string) {
 function place(value: string) {
   return value === "others" ? "其他地点" : value.replaceAll("_", " / ");
 }
+function archiveFolder(entry: Entry) {
+  if (!entry.target_rel) return "—";
+  return entry.category === "documents"
+    ? entry.target_rel.split("/")[2] || "—"
+    : place(entry.location);
+}
 function basis(entry: Entry) {
+  let folderSource: string;
+  if (entry.category === "documents") {
+    folderSource = `文档子目录 ${archiveFolder(entry)}`;
+  } else if (entry.location_source === "gps_approximate") {
+    folderSource = "GPS 推算地点";
+  } else if (entry.location_source === "metadata") {
+    folderSource = "文件记录地点";
+  } else if (entry.location_source === "manual") {
+    folderSource = "手动设置地点";
+  } else {
+    folderSource = "未确定地点";
+  }
   return [
     entry.type_source,
     entry.date_source?.startsWith("metadata")
@@ -318,11 +342,7 @@ function basis(entry: Entry) {
       : entry.date_source === "filename"
         ? "文件名日期"
         : "文件修改时间",
-    entry.location_source === "gps_approximate"
-      ? "GPS 推算地点"
-      : entry.location_source === "metadata"
-        ? "文件记录地点"
-        : "未确定地点",
+    folderSource,
     ...(entry.warnings || []),
   ]
     .filter(Boolean)
@@ -469,7 +489,7 @@ async function saveEdit() {
         ids: [...selected.value],
         category: editCategory.value || null,
         month: editMonth.value || null,
-        location: editLocation.value || null,
+        location: editUsesLocation.value ? editLocation.value || null : null,
       }),
     });
     showEdit.value = false;
@@ -665,7 +685,7 @@ onUnmounted(() => {
       <div class="sidebar-footer">
         <span class="status-dot" :class="{ disconnected: !connected }"></span
         >{{ connected ? "本地服务已连接" : "正在重新连接"
-        }}<small>v{{ meta?.version || "0.1.0" }}</small>
+        }}<small v-if="meta?.version">v{{ meta.version }}</small>
       </div>
     </aside>
 
@@ -702,7 +722,7 @@ onUnmounted(() => {
             <div>
               <div class="eyebrow">YOUR FILES, IN ORDER</div>
               <h1>让散落的文件，各归其位<span>。</span></h1>
-              <p>按类型、月份和地点整理文件，完整复制，逐一核验。</p>
+              <p>按类型和月份整理文件，文档按后缀归档。</p>
             </div>
             <div class="heading-decoration">
               <FolderOpen :size="36" /><CheckCheck :size="18" />
@@ -834,13 +854,13 @@ onUnmounted(() => {
                     <MapPin :size="14" />CN_Zhejiang_Hangzhou
                   </div>
                   <div class="tree-child">
-                    <Image :size="16" /><b>images</b><span>/</span>
+                    <FileText :size="16" /><b>documents</b><span>/</span>
                   </div>
-                  <div class="tree-child">
-                    <Film :size="16" /><b>videos</b><span>/</span>
+                  <div class="tree-child indent">
+                    <CalendarDays :size="14" />202611<span>/</span>
                   </div>
-                  <div class="tree-child muted">
-                    <Music2 :size="16" />audio<span>/</span><i>…</i>
+                  <div class="tree-child indent-deep">
+                    <Folder :size="14" />pdf<span>/</span>
                   </div>
                 </div>
                 <div class="guide-bottom">
@@ -1147,7 +1167,7 @@ onUnmounted(() => {
                     <th>文件名称</th>
                     <th>类型</th>
                     <th>月份</th>
-                    <th>地点</th>
+                    <th>归档子目录</th>
                     <th>大小</th>
                     <th>状态</th>
                     <th v-if="editable"></th>
@@ -1214,9 +1234,12 @@ onUnmounted(() => {
                     </td>
                     <td class="location-cell" :title="basis(entry)">
                       <MapPin
-                        v-if="entry.location_source === 'gps_approximate'"
+                        v-if="
+                          entry.category !== 'documents' &&
+                          entry.location_source === 'gps_approximate'
+                        "
                         :size="12"
-                      />{{ place(entry.location) }}
+                      />{{ archiveFolder(entry) }}
                     </td>
                     <td class="numeric muted">{{ size(entry.size) }}</td>
                     <td>
@@ -1466,7 +1489,11 @@ onUnmounted(() => {
                   <span class="brand-icon"><Layers3 :size="21" /></span>
                   <div>
                     <strong>Media Organizer</strong
-                    ><small>媒体整理器 · v{{ meta?.version || "0.1.0" }}</small>
+                    ><small
+                      >媒体整理器<span v-if="meta?.version">
+                        · v{{ meta.version }}</span
+                      ></small
+                    >
                   </div>
                 </div>
                 <p>本地处理 · 离线运行 · 复制后校验</p>
@@ -1606,12 +1633,19 @@ onUnmounted(() => {
             v-model="editMonth"
             placeholder="YYYYMM，例如 202611"
             pattern="[0-9]{6}"
-          /><label class="field-label">地点</label
-          ><input
-            class="standard-input"
-            v-model="editLocation"
-            placeholder="例如 CN_Zhejiang_Hangzhou 或 others"
           />
+          <template v-if="editUsesLocation">
+            <label class="field-label" for="edit-location"
+              >地点 <span>适用于按地点归档的文件</span></label
+            >
+            <input
+              id="edit-location"
+              class="standard-input"
+              v-model="editLocation"
+              placeholder="例如 CN_Zhejiang_Hangzhou 或 others"
+            />
+          </template>
+          <p v-else class="field-hint">文档按文件后缀归档。</p>
           <div class="verification-hint">
             <ShieldCheck :size="15" />仅调整归档路径，源文件元数据保持原样。
           </div>

@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .filedata import BLOCK, Interrupted, ProcessLock, copy_extras, extra_signature, sha256, preserve_windows_properties, property_report
 from .geography import Places
-from .metadata import DEFAULT_MAPPING, MetadataReader, classify
+from .metadata import DEFAULT_MAPPING, DOCUMENT_LOCATION, MetadataReader, classify
 from .paths import CATEGORIES, LEVELS, contained, is_link, relative_target, validate_override, validate_roots
 from .store import Store, now
 
@@ -171,11 +171,12 @@ class Organizer:
                 argument_length = 0
         flush()
         warnings = []
+        stats = self.store.stats(job_id)
         if not self.reader.executable:
             warnings.append("ExifTool 不可用，当前使用图片元数据回退读取；正式发行包必须携带 ExifTool")
-        if not self.places.available:
+        if not self.places.available and (stats["categories"].keys() - {"documents"}):
             warnings.append("离线城市库不可用，无法执行离线城市反查")
-        self.store.update_job(job_id, status="ready", phase="扫描完成，请检查整理预览", stats=self.store.stats(job_id), warnings=warnings)
+        self.store.update_job(job_id, status="ready", phase="扫描完成，请检查整理预览", stats=stats, warnings=warnings)
 
     def edit(self, job_id: str, ids: list[int], changes: dict) -> int:
         with self.lock:
@@ -192,11 +193,24 @@ class Organizer:
                 entry = self.store.entry(job_id, entry_id)
                 if entry["kind"] != "file":
                     raise ValueError("特殊项目不能通过修改分类转为普通文件")
-                merged = {**entry, **allowed}
+                updates = allowed.copy()
+                category = updates.get("category", entry["category"])
+                if category == "documents":
+                    if updates.keys() == {"location"}:
+                        continue
+                    updates.update(DOCUMENT_LOCATION)
+                elif "location" in updates:
+                    updates.update(location_source="manual", city="", distance_km=None)
+                elif not entry["location"]:
+                    updates.update(location="others", location_source="unknown")
+                merged = {**entry, **updates}
                 validate_override(merged["category"], merged["month"], merged["location"])
-                records.append((entry_id, merged))
-            for entry_id, merged in records:
-                self.store.update_entry(job_id, entry_id, **allowed, target_rel=relative_target(merged), manual=True)
+                updates["target_rel"] = relative_target(merged)
+                records.append((entry_id, updates))
+            if not records:
+                raise ValueError("文档按后缀归档，可修改类型或月份")
+            for entry_id, updates in records:
+                self.store.update_entry(job_id, entry_id, **updates, manual=True)
             return len(records)
 
     def execute(self, job_id: str, verification: str | None = None, background: bool = True, verify_only: bool = False):

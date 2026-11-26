@@ -50,7 +50,7 @@ def parser():
     edit.add_argument("--ids", type=int, nargs="+", required=True)
     edit.add_argument("--category", choices=CATEGORIES)
     edit.add_argument("--month")
-    edit.add_argument("--location")
+    edit.add_argument("--location", help="设置按地点归档的文件的地点")
     config = commands.add_parser("config", help="查看或导入导出配置")
     config.add_argument("--import", dest="import_path", type=Path)
     config.add_argument("--export", dest="export_path", type=Path)

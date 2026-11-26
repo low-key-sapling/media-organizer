@@ -68,11 +68,11 @@ def test_same_name_same_content_reuses_and_different_content_survives(organizer,
     job = run(organizer, source, target, "quick")
     entries = list(organizer.store.iter_entries(job["id"]))
     assert len({e["target_rel"] for e in entries}) == 2
-    assert {p.read_bytes() for p in (target / "documents/202611/others").glob("*.txt")} == {b"AAAA", b"BBBB"}
+    assert {p.read_bytes() for p in (target / "documents/202611/txt").glob("*.txt")} == {b"AAAA", b"BBBB"}
     assert any(e["status"] == "reused" for e in entries)
     repeated = run(organizer, source, target)
     assert repeated["safe_to_delete"]
-    assert len(list((target / "documents/202611/others").glob("*.txt"))) == 2
+    assert len(list((target / "documents/202611/txt").glob("*.txt"))) == 2
 
 
 def test_corruption_with_same_size_is_detected(organizer, directories):
@@ -311,6 +311,41 @@ def test_changes_to_an_earlier_verified_target_are_detected(organizer, directori
     assert checked["status"] == "completed_issues"
 
 
+def test_document_conversion_and_location_edit_in_a_mixed_selection(organizer, directories):
+    source, target = directories
+    for name in ("Memo_20261125", "Invoice_20261125.PDF"):
+        (source / name).write_text(name, encoding="utf-8")
+    job = organizer.create(str(source), str(target), background=False)
+    entries = {entry["source_rel"]: entry for entry in organizer.store.iter_entries(job["id"])}
+    memo = entries["Memo_20261125"]["id"]
+    invoice = entries["Invoice_20261125.PDF"]["id"]
+    assert organizer.edit(job["id"], [memo, invoice], {"location": "CN_Zhejiang_Hangzhou"}) == 1
+    assert organizer.store.entry(job["id"], memo)["location"] == "CN_Zhejiang_Hangzhou"
+    assert organizer.store.entry(job["id"], invoice)["location"] == ""
+
+    organizer.edit(job["id"], [memo], {"category": "documents"})
+    organizer.edit(job["id"], [invoice], {"category": "images"})
+    result = organizer.execute(job["id"], background=False)
+    assert result["safe_to_delete"], result
+    assert (target / "documents/202611/others/Memo_20261125").is_file()
+    assert (target / "images/202611/others/Invoice_20261125.PDF").is_file()
+
+
+def test_old_document_plan_can_be_copied_and_reverified(organizer, directories):
+    source, target = directories
+    name = "20261125.txt"
+    (source / name).write_bytes(b"existing plan")
+    job = organizer.create(str(source), str(target), background=False)
+    entry = next(organizer.store.iter_entries(job["id"]))
+    legacy_path = f"documents/202611/others/{name}"
+    organizer.store.update_entry(job["id"], entry["id"], target_rel=legacy_path, location="others", location_source="unknown")
+
+    assert organizer.execute(job["id"], background=False)["safe_to_delete"]
+    assert organizer.execute(job["id"], background=False, verify_only=True)["safe_to_delete"]
+    assert (target / legacy_path).read_bytes() == b"existing plan"
+    assert list(target.rglob(name)) == [target / legacy_path]
+
+
 def test_copy_on_filesystems_without_hard_links(organizer, directories, monkeypatch):
     source, target = directories
     (source / "20261125.txt").write_bytes(b"fallback content")
@@ -319,13 +354,13 @@ def test_copy_on_filesystems_without_hard_links(organizer, directories, monkeypa
     monkeypatch.setattr(os, "link", unsupported)
     job = run(organizer, source, target)
     assert job["safe_to_delete"], job
-    assert (target / "documents/202611/others/20261125.txt").read_bytes() == b"fallback content"
+    assert (target / "documents/202611/txt/20261125.txt").read_bytes() == b"fallback content"
 
 
 def test_exclusive_open_failure_never_deletes_a_concurrent_target(organizer, directories, monkeypatch):
     source, target = directories
     (source / "20261125.txt").write_bytes(b"source")
-    destination = target / "documents/202611/others/20261125.txt"
+    destination = target / "documents/202611/txt/20261125.txt"
     def unsupported(*args):
         raise OSError("hard links not supported")
     original_open = Path.open

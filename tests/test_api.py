@@ -1,3 +1,5 @@
+import csv
+import io
 import time
 
 from fastapi.testclient import TestClient
@@ -17,7 +19,9 @@ def settled(client, job_id):
 
 def test_api_complete_flow_and_report(organizer, directories):
     source, target = directories
-    (source / "20261125.txt").write_text("hello", encoding="utf-8")
+    documents = {"20261125.txt": "txt", "合同_20261125.PDF": "pdf", "记录_20261125.docx": "docx"}
+    for name in documents:
+        (source / name).write_text(name, encoding="utf-8")
     with TestClient(create_app(organizer=organizer), base_url="http://127.0.0.1") as client:
         assert client.get("/api/meta").json()["offline"]
         response = client.post("/api/jobs", json={"source": str(source), "target": str(target)})
@@ -25,15 +29,27 @@ def test_api_complete_flow_and_report(organizer, directories):
         job_id = response.json()["id"]
         assert settled(client, job_id)["status"] == "ready"
         listing = client.get(f"/api/jobs/{job_id}/files").json()
-        entry_id = listing["items"][0]["id"]
+        entries = {entry["source_rel"]: entry for entry in listing["items"]}
+        for name, extension in documents.items():
+            entry = entries[name]
+            assert entry["target_rel"] == f"documents/202611/{extension}/{name}"
+            assert entry["location"] == ""
+        entry_id = entries["20261125.txt"]["id"]
+        location = client.patch(f"/api/jobs/{job_id}/files", json={"ids": [entry_id], "location": "CN_Zhejiang_Hangzhou"})
+        assert location.status_code == 400
         edited = client.patch(f"/api/jobs/{job_id}/files", json={"ids": [entry_id], "month": "202001"})
         assert edited.status_code == 200
         assert client.post(f"/api/jobs/{job_id}/execute", json={"verification": "full"}).status_code == 202
         assert settled(client, job_id)["safe_to_delete"] is True
         export = client.get(f"/api/jobs/{job_id}/report.csv")
         assert export.status_code == 200
-        assert "202001" in export.text
-        assert (source / "20261125.txt").read_text() == "hello"
+        manifest = {row["source_rel"]: row for row in csv.DictReader(io.StringIO(export.content.decode("utf-8-sig")))}
+        for name, extension in documents.items():
+            month = "202001" if name == "20261125.txt" else "202611"
+            path = f"documents/{month}/{extension}/{name}"
+            assert manifest[name]["target_rel"] == path
+            assert manifest[name]["location"] == ""
+            assert (target / path).read_bytes() == (source / name).read_bytes()
 
 
 def test_origin_host_and_path_validation(organizer, directories):

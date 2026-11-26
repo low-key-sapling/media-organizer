@@ -74,9 +74,15 @@ def validate_override(category: str, month: str, location: str) -> None:
         raise ValueError("无效的文件类型")
     if not re.fullmatch(r"\d{4}(0[1-9]|1[0-2])", month) or int(month[:4]) == 0:
         raise ValueError("月份格式必须为 YYYYMM")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,159}", location):
+    if category != "documents" and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,159}", location):
         raise ValueError("地点需使用英文字母、数字、下划线或短横线")
 
 
 def relative_target(entry: dict) -> str:
-    return "/".join((entry["category"], entry["month"], entry["location"], safe_name(Path(entry["source_rel"]).name)))
+    source = Path(entry["source_rel"])
+    category = entry["category"]
+    folder = entry["location"]
+    if category == "documents":
+        extension = source.suffix.removeprefix(".").lower()
+        folder = safe_name(extension) if extension else "others"
+    return "/".join((category, entry["month"], folder, safe_name(source.name)))

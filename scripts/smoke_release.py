@@ -57,6 +57,9 @@ def main():
         photo = next(entry for entry in files if entry["source_rel"] == "相机 照片.jpg")
         assert photo["category"] == "photos"
         assert photo["location"].startswith("CN_Zhejiang_"), photo
+        document = next(entry for entry in files if entry["source_rel"] == "旅途 20261125.txt")
+        assert document["target_rel"] == "documents/202611/txt/旅途 20261125.txt", document
+        assert not document["location"], document
         for entry in files:
             expected = originals[entry["source_rel"]]
             assert (source / entry["source_rel"]).read_bytes() == expected

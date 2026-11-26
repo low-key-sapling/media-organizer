@@ -20,6 +20,7 @@ EXTENSIONS = {
     "archives": "zip rar 7z tar gz bz2 xz zst tgz tbz2 txz iso cab",
 }
 DEFAULT_MAPPING = {ext: category for category, extensions in EXTENSIONS.items() for ext in extensions.split()}
+DOCUMENT_LOCATION = {"location": "", "location_source": "", "city": "", "distance_km": None}
 
 
 def exiftool_path() -> Path | None:
@@ -115,6 +116,35 @@ def filename_date(name: str) -> tuple[datetime | None, bool]:
     return (next(iter(found)), False) if len(found) == 1 else (None, len(found) > 1)
 
 
+def classify_location(metadata: dict, places: Places, settings: dict, warnings: list[str]) -> dict:
+    place = None
+    city = str(tag(metadata, "LocationCreatedCity") or tag(metadata, "City") or "")
+    if city:
+        place = places.city(city, str(tag(metadata, "LocationCreatedCountryCode") or tag(metadata, "LocationCreatedCountryName") or tag(metadata, "CountryCode") or tag(metadata, "Country") or tag(metadata, "Country-PrimaryLocationName") or ""), str(tag(metadata, "LocationCreatedProvinceState") or tag(metadata, "Province-State") or ""))
+        if not place:
+            warnings.append("地点文字无法唯一匹配到城市")
+    lat, lon = tag(metadata, "GPSLatitude"), tag(metadata, "GPSLongitude")
+    gps_place = None
+    if lat is not None and lon is not None:
+        try:
+            latitude, longitude = float(lat), float(lon)
+            if str(tag(metadata, "GPSLatitudeRef")).upper() == "S":
+                latitude = -abs(latitude)
+            if str(tag(metadata, "GPSLongitudeRef")).upper() == "W":
+                longitude = -abs(longitude)
+            gps_place = places.nearest(latitude, longitude, settings.get("max_city_distance_km", 100))
+        except (ValueError, TypeError):
+            warnings.append("GPS 坐标无法读取")
+    if place and gps_place and place["location"] != gps_place["location"]:
+        warnings.append("地点文字与 GPS 推算结果不同，已优先采用地点文字")
+    place = place or gps_place or {"location": "others", "location_source": "unknown", "city": "", "distance_km": None}
+    if place["location_source"] == "gps_approximate":
+        warnings.append("地点根据 GPS 近似匹配")
+    if not places.available:
+        warnings.append("离线城市库不可用，地点归类能力受限")
+    return place
+
+
 def classify(source_rel: str, stat, metadata: dict, places: Places, settings: dict) -> dict:
     extension = Path(source_rel).suffix.lower().lstrip(".")
     mapping = {**DEFAULT_MAPPING, **settings.get("extension_mapping", {})}
@@ -153,31 +183,7 @@ def classify(source_rel: str, stat, metadata: dict, places: Places, settings: di
             warnings.append("存在创建或数字化时间，未将其直接当作拍摄/录制时间")
     if date.replace(tzinfo=None) > datetime.now() + timedelta(days=2):
         warnings.append("归档日期在未来，请检查")
-    place = None
-    city = str(tag(metadata, "LocationCreatedCity") or tag(metadata, "City") or "")
-    if city:
-        place = places.city(city, str(tag(metadata, "LocationCreatedCountryCode") or tag(metadata, "LocationCreatedCountryName") or tag(metadata, "CountryCode") or tag(metadata, "Country") or tag(metadata, "Country-PrimaryLocationName") or ""), str(tag(metadata, "LocationCreatedProvinceState") or tag(metadata, "Province-State") or ""))
-        if not place:
-            warnings.append("地点文字无法唯一匹配到城市")
-    lat, lon = tag(metadata, "GPSLatitude"), tag(metadata, "GPSLongitude")
-    gps_place = None
-    if lat is not None and lon is not None:
-        try:
-            latitude, longitude = float(lat), float(lon)
-            if str(tag(metadata, "GPSLatitudeRef")).upper() == "S":
-                latitude = -abs(latitude)
-            if str(tag(metadata, "GPSLongitudeRef")).upper() == "W":
-                longitude = -abs(longitude)
-            gps_place = places.nearest(latitude, longitude, settings.get("max_city_distance_km", 100))
-        except (ValueError, TypeError):
-            warnings.append("GPS 坐标无法读取")
-    if place and gps_place and place["location"] != gps_place["location"]:
-        warnings.append("地点文字与 GPS 推算结果不同，已优先采用地点文字")
-    place = place or gps_place or {"location": "others", "location_source": "unknown", "city": "", "distance_km": None}
-    if place["location_source"] == "gps_approximate":
-        warnings.append("地点根据 GPS 近似匹配")
-    if not places.available:
-        warnings.append("离线城市库不可用，地点归类能力受限")
+    place = DOCUMENT_LOCATION if category == "documents" else classify_location(metadata, places, settings, warnings)
     result = {"source_rel": source_rel, "kind": "file", "status": "planned", "size": stat.st_size, "mtime_ns": stat.st_mtime_ns, "ctime_ns": stat.st_ctime_ns, "mode": stat.st_mode, "category": category, "month": f"{date.year:04d}{date.month:02d}", "date_source": date_source, "original_date": date.isoformat(), "type_source": type_source, **place, "warnings": warnings, "error": "", "source_hash": "", "target_hash": "", "content_verified": False, "manual": False, "extra_issues": []}
     result["target_rel"] = relative_target(result)
     result.update(birthtime_ns=getattr(stat, "st_birthtime_ns", None), uid=getattr(stat, "st_uid", None), gid=getattr(stat, "st_gid", None))
